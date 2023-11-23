@@ -1,0 +1,23 @@
+ echo $'import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
+import warnings
+warnings.filterwarnings("ignore")
+
+spark = SparkSession.builder.appName("H&M").getOrCreate()
+transactions = (spark.read.format("csv")
+                .option("header", "true")
+                .load("transactions_train.csv"))
+transactions.printSchema()
+transactions = transactions.withColumn("t_dat", to_date("t_dat"))
+
+tmp = transactions.groupby("customer_id").agg(
+    expr("max(t_dat) AS latest_date")
+)
+
+joinExpression = transactions["customer_id"] == tmp["customer_id"]
+
+transactions = transactions.join(tmp, joinExpression).drop(tmp["customer_id"])
+transactions = transactions.withColumn("date_diff", datediff(col("latest_date"), col("t_dat"))).filter("date_diff <= 6")
+tmp = (transactions.groupby("customer_id", "article_id").count())
+tmp.orderBy("count", ascending=False).show(5)' > testSpark.py

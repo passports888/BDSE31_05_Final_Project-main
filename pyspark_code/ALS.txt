@@ -1,0 +1,44 @@
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType,StructField, StringType, IntegerType
+from pyspark.sql.types import ArrayType, DoubleType, BooleanType
+from pyspark.sql.functions import col,array_contains
+from pyspark.sql import SQLContext
+from pyspark.ml.recommendation import ALS
+from pyspark.sql.functions import udf,col,when
+from pyspark.sql.functions import to_timestamp,date_format
+import numpy as np
+import pandas as pd
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+from pyspark.sql.window import *
+from pyspark.ml.evaluation import RegressionEvaluator
+from pyspark.ml.feature import StringIndexer
+from pyspark.sql.functions import col
+
+
+# load file
+sc = SparkSession.builder.appName("Recommendations").getOrCreate()
+spark = SparkSession(sc)
+transaction = spark.read.option("header",True).csv("transactionsEncode.csv")
+transaction.printSchema()
+
+# Prepare the dataset (limit先限制大小)
+transaction=transaction.groupby('encode_customer_id', 'encode_article_id').count().limit(10000)
+transaction.printSchema()
+print((transaction.count(), len(transaction.columns)))
+transaction = transaction.withColumn("c_id", col("encode_customer_id").cast("int"))
+transaction = transaction.withColumn("t_id", col("encode_article_id").cast("int"))
+transaction.printSchema()
+#building c_id t_id in order to train AlS
+
+
+
+# Building ALS model
+als=ALS(maxIter=5,regParam=0.01,rank=100,userCol="c_id",itemCol="t_id",ratingCol="count",coldStartStrategy="drop",nonnegative=True)
+
+
+# Fit model and recomendate
+ALS=als.fit(transaction)
+item_recs=ALS.recommendForAllItems(10).show(10)
+user_recs = ALS.recommendForAllUsers(10).show(10)
